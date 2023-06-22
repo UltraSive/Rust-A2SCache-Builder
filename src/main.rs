@@ -3,13 +3,13 @@ use std::net::{SocketAddr, ToSocketAddrs};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UdpSocket;
 
-async fn query_server(address: &str, query_packet: &[u8]) -> Result<(), Box<dyn Error>> {
+async fn query_server(address: &str, query_type: &str, query_packet: &[u8]) -> Result<(), Box<dyn Error>> {
     let server_socket_addr: SocketAddr = address.to_socket_addrs()?.next().ok_or("Invalid address")?;
 
     let socket: UdpSocket = UdpSocket::bind("0.0.0.0:0").await?;
     socket.connect(server_socket_addr).await?;
     socket.send(query_packet).await?;
-    println!("Query: {:?}", query_packet);
+    println!("{} {} Query: {:?}", address, query_type, query_packet);
 
     let mut buf: [u8; 4096] = [0u8; 4096];
     let _amt: usize = socket.recv(&mut buf).await?;
@@ -17,7 +17,7 @@ async fn query_server(address: &str, query_packet: &[u8]) -> Result<(), Box<dyn 
     let response_str: std::borrow::Cow<'_, str> = String::from_utf8_lossy(response);
 
     if response.len() == 9 {
-        println!("Challenge: {}", response_str);
+        println!("{} {} Challenge: {}", address, query_type, response_str);
 
         let challenge: &[u8] = &response[5..9];
         let challenge_packet: Vec<u8> = query_packet
@@ -25,7 +25,7 @@ async fn query_server(address: &str, query_packet: &[u8]) -> Result<(), Box<dyn 
             .chain(challenge.iter())
             .cloned()
             .collect();
-        println!("Query Challenge: {:?}", challenge_packet);
+        println!("{} {} Query Challenge: {:?}", address, query_type, challenge_packet);
 
         socket.send(&challenge_packet).await?;
 
@@ -34,9 +34,9 @@ async fn query_server(address: &str, query_packet: &[u8]) -> Result<(), Box<dyn 
         let response_challenge: &[u8] = &buf_challenge[.._amt_challenge];
         let response_str_challenge: std::borrow::Cow<'_, str> =
             String::from_utf8_lossy(response_challenge);
-        println!("Response (Challenged): {}", response_str_challenge);
+        println!("{} {} Response (Challenged): {}", address, query_type, response_str_challenge);
     } else {
-        println!("Response: {}", response_str);
+        println!("{} {} Response: {}", address, query_type, response_str);
     }
 
     Ok(())
@@ -62,8 +62,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut tasks = Vec::new();
 
     for address in server_addresses {
-        let query_task_info = query_server(address, a2s_info);
-        let query_task_player = query_server(address, a2s_player);
+        let query_task_info = query_server(address, "A2S_INFO", a2s_info);
+        let query_task_player = query_server(address, "A2S_PLAYER", a2s_player);
 
         tasks.push(tokio::spawn(async move {
             query_task_info.await.unwrap();
