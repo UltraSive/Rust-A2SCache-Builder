@@ -44,18 +44,36 @@ async fn query_server(address: &str, query_packet: &[u8]) -> Result<(), Box<dyn 
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let server_address: &str = "138.201.130.250:27017";
+    let server_addresses: Vec<&str> = vec![
+        "138.201.130.250:27017",
+        "192.168.1.100:27017",
+        // Add more server addresses as needed
+    ];
+
     let a2s_info: &[u8; 25] = &[
         0xff, 0xff, 0xff, 0xff, b'T', b'S', b'o', b'u', b'r', b'c', b'e', b' ', b'E', b'n', b'g',
         b'i', b'n', b'e', b' ', b'Q', b'u', b'e', b'r', b'y', 0x00,
     ];
     let a2s_player: &[u8; 25] = &[
-        0xff, 0xff, 0xff, 0xff, b'T', b'S', b'o', b'u', b'r', b'c', b'e', b' ', b'E', b'n', b'g',
+        0xff, 0xff, 0xff, 0xff, b'U', b'S', b'o', b'u', b'r', b'c', b'e', b' ', b'E', b'n', b'g',
         b'i', b'n', b'e', b' ', b'Q', b'u', b'e', b'r', b'y', 0x00,
     ];
 
-    query_server(server_address, a2s_info).await?;
-    query_server(server_address, a2s_player).await?;
+    let mut tasks = Vec::new();
+
+    for address in server_addresses {
+        let query_task_info = query_server(address, a2s_info);
+        let query_task_player = query_server(address, a2s_player);
+
+        tasks.push(tokio::spawn(async move {
+            query_task_info.await.unwrap();
+            query_task_player.await.unwrap();
+        }));
+    }
+
+    for task in tasks {
+        task.await?;
+    }
 
     Ok(())
 }
